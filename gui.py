@@ -37,6 +37,8 @@ class GUI:
         chooseTable.pack(pady=100)
 
         # część do tabu z wykresami
+
+        # przycisk do tworzenia wykresów
         createGraphBtn = Button(self.graphTab, text="Stwórz wykres", command=self.create_graph).place(relx=.5, y=65,
                                                                                                       anchor=CENTER)
 
@@ -98,8 +100,15 @@ class GUI:
         self.table.destroy()
         self.tableScrollView.destroy()
 
-    # metoda na stworzenie wykresu (tu macie przykładowe na których możecie się wzorować)
+    # metoda na stworzenie wykresu (tu macie przykładowe wykresy na których możecie się wzorować)
     def create_graph(self):
+
+        # pobieranie json'a z api
+        response = requests.get('https://api.gios.gov.pl/pjp-api/rest/station/findAll')
+        json = response.json()
+
+
+        # przykadowe dane do wykresów
         data1 = {'Country': ['US', 'CA', 'GER', 'UK', 'FR'],
                  'GDP_Per_Capita': [45000, 42000, 52000, 49000, 47000]
                  }
@@ -115,6 +124,7 @@ class GUI:
                  }
         df3 = DataFrame(data3, columns=['Interest_Rate', 'Stock_Index_Price'])
 
+        # przykładowe wykresy
         label = Label(self.graphTab, text="Przykładowe wykresy", font=(None, 20)).place(relx=.5, y=170, anchor=CENTER)
         figure1 = plt.Figure(figsize=(6, 5), dpi=100)
         ax1 = figure1.add_subplot(111)
