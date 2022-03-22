@@ -12,8 +12,9 @@ class GUI:
 
         self.myFrame = Frame(master)
         self.myFrame.pack()
-        self.table = NONE
-        self.tableScrollView = NONE
+        self.table = None
+        self.tableScrollView = None
+        self.barGraph = None
 
         # taby do GUI
         tabControl = ttk.Notebook(master)
@@ -23,7 +24,7 @@ class GUI:
         tabControl.add(self.tableTab, text='Tabele')
         tabControl.add(self.graphTab, text='Wykresy')
         tabControl.add(self.machineLearningTab, text='Uczenie maszynowe')
-        tabControl.pack(expand=1, fill="both")
+        tabControl.pack(expand=True, fill="both")
 
         # część do tabu z tabelą
         self.tableTitle = Label(self.tableTab, text="", font=(None, 20))
@@ -38,14 +39,75 @@ class GUI:
 
         # część do tabu z wykresami
 
-        # przycisk do tworzenia wykresów
-        createGraphBtn = Button(self.graphTab, text="Stwórz wykres", command=self.create_graph).place(relx=.5, y=65,
-                                                                                                      anchor=CENTER)
+        # miejsce w którym udało się zaimplementować scrollowanie
+        self.canvas = Canvas(self.graphTab)
+        self.frame = Frame(self.canvas)
+        self.vsb = Scrollbar(self.graphTab, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.vsb.set)
+        self.vsb.pack(side="right", fill="y", expand=0)
+        self.canvas.pack(fill="both", expand=1)
+        self.canvas.create_window((840, 0), window=self.frame, anchor=CENTER,
+                                  tags="self.frame", width=1000)
+        self.frame.bind("<Configure>", self.onFrameConfigure)
+
+
+
+
+        self.graphTitle = Label(self.frame, text="", font=(None, 17))
+        self.graphTitle.place(relx=.5, y=200, anchor=CENTER)
+
+
+        label = Label(self.frame, text="Wybierz stację pomiarową", font=(None, 20)).place(relx=.5, y=65, anchor=CENTER)
+        tkvar = StringVar(master)
+
+        stacjePomiarowe = self.stacje_pomiarowe();
+        tkvar.set(stacjePomiarowe[0][0]) # tutaj stacje pomiarowe
+        chooseTable = tkinter.OptionMenu(self.frame, tkvar, *stacjePomiarowe[0], command=self.stanowiska_pomiarowe)
+        chooseTable.pack(pady=100)
+
+    def onFrameConfigure(self, event):
+        '''Reset the scroll region to encompass the inner frame'''
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    #pobiera nazwy stacji pomiarowych
+    def stacje_pomiarowe(self):
+        nazwy_stacji = []
+        id_stacji = []
+        response = requests.get("https://api.gios.gov.pl/pjp-api/rest/station/findAll")
+        json = response.json()
+        for x in json:
+            nazwy_stacji.append((x['stationName']))
+            id_stacji.append((x['id']))
+        return nazwy_stacji,id_stacji
+
+
+    #pobiera stanowiska pomiarowe dla id danej stacji pomiarowej
+    def stanowiska_pomiarowe(self, selection):
+
+        self.graphTitle.configure(text=selection)
+        print(selection)
+
+        lista_stacji = self.stacje_pomiarowe();
+        ilosc_stacji = len(lista_stacji[0]);
+
+        for x in range(ilosc_stacji):
+            if lista_stacji[0][x] == selection:
+                id = lista_stacji[1][x]
+
+        path = "https://api.gios.gov.pl/pjp-api/rest/station/sensors/" + str(id)
+        response = requests.get(path)
+        json = response.json()
+
+        id_stanowiska = []
+
+        for x in json:
+            id_stanowiska.append((x['id']))
+        self.create_graph(id_stanowiska)
 
     # metoda na pobranie danych z odpowiedniego api i ustawienie ich do tabeli
     def get_data(self, selection):
 
-        if self.table != NONE:
+        if self.table is not None:
             self.delete_table()
 
         self.tableTitle.configure(text=selection)
@@ -101,56 +163,45 @@ class GUI:
         self.tableScrollView.destroy()
 
     # metoda na stworzenie wykresu (tu macie przykładowe wykresy na których możecie się wzorować)
-    def create_graph(self):
+    def create_graph(self, dane):
 
-        # pobieranie json'a z api
-        response = requests.get('https://api.gios.gov.pl/pjp-api/rest/station/findAll')
-        json = response.json()
+        if self.barGraph is not None:
+            self.delete_graph()
 
+        ilosc = len(dane);
+        i = 0;
 
-        # przykadowe dane do wykresów
-        data1 = {'Country': ['US', 'CA', 'GER', 'UK', 'FR'],
-                 'GDP_Per_Capita': [45000, 42000, 52000, 49000, 47000]
-                 }
-        df1 = DataFrame(data1, columns=['Country', 'GDP_Per_Capita'])
+        for x in range(ilosc):
+            i = i + 1;
+            id = str(dane[x])
+            path = "https://api.gios.gov.pl/pjp-api/rest/data/getData/" + id;
+            response = requests.get(path);
+            json = response.json()
 
-        data2 = {'Year': [1920, 1930, 1940, 1950, 1960, 1970, 1980, 1990, 2000, 2010],
-                 'Unemployment_Rate': [9.8, 12, 8, 7.2, 6.9, 7, 6.5, 6.2, 5.5, 6.3]
-                 }
-        df2 = DataFrame(data2, columns=['Year', 'Unemployment_Rate'])
+            values = json["values"]
+            key = json["key"]
+            date = []
+            value = []
 
-        data3 = {'Interest_Rate': [5, 5.5, 6, 5.5, 5.25, 6.5, 7, 8, 7.5, 8.5],
-                 'Stock_Index_Price': [1500, 1520, 1525, 1523, 1515, 1540, 1545, 1560, 1555, 1565]
-                 }
-        df3 = DataFrame(data3, columns=['Interest_Rate', 'Stock_Index_Price'])
+            for x in values:
+                date.append(x["date"])
+                value.append(x["value"])
 
-        # przykładowe wykresy
-        label = Label(self.graphTab, text="Przykładowe wykresy", font=(None, 20)).place(relx=.5, y=170, anchor=CENTER)
-        figure1 = plt.Figure(figsize=(6, 5), dpi=100)
-        ax1 = figure1.add_subplot(111)
-        bar1 = FigureCanvasTkAgg(figure1, self.graphTab)
-        bar1.get_tk_widget().pack(side=LEFT)
-        df1 = df1[['Country', 'GDP_Per_Capita']].groupby('Country').sum()
-        df1.plot(kind='bar', legend=True, ax=ax1)
-        ax1.set_title('Country Vs. GDP Per Capita')
+            d1 = {'Date' : date, 'Value' : value}
+            df1 = DataFrame(d1, columns=['Date', 'Value'])
 
-        figure2 = plt.Figure(figsize=(5, 4), dpi=100)
-        ax2 = figure2.add_subplot(111)
-        line2 = FigureCanvasTkAgg(figure2, self.graphTab)
-        line2.get_tk_widget().pack(side=LEFT)
-        df2 = df2[['Year', 'Unemployment_Rate']].groupby('Year').sum()
-        df2.plot(kind='line', legend=True, ax=ax2, color='r', marker='o', fontsize=10)
-        ax2.set_title('Year Vs. Unemployment Rate')
+            figure1 = plt.Figure(figsize=(4, 3), dpi=100)
+            ax1 = figure1.add_subplot(111)
+            self.barGraph = FigureCanvasTkAgg(figure1, self.frame)
+            self.barGraph.get_tk_widget().pack()
+            df1 = df1[['Date', 'Value']].groupby('Date').sum()
+            df1.plot(kind='bar', legend=True, ax=ax1)
+            ax1.set_title(key)
 
-        figure3 = plt.Figure(figsize=(5, 4), dpi=100)
-        ax3 = figure3.add_subplot(111)
-        ax3.scatter(df3['Interest_Rate'], df3['Stock_Index_Price'], color='g')
-        scatter3 = FigureCanvasTkAgg(figure3, self.graphTab)
-        scatter3.get_tk_widget().pack(side=LEFT)
-        ax3.legend(['Stock_Index_Price'])
-        ax3.set_xlabel('Interest Rate')
-        ax3.set_title('Interest Rate Vs. Stock Index Price')
-
+    # metoda na usunięcie wykresu
+    def delete_graph(self):
+        self.barGraph.get_tk_widget().destroy()
+        self.barGraph = None
 
 def main():
     window = Tk()
